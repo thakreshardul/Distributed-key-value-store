@@ -45,7 +45,7 @@ static void handle_get_response (const Dkvs__Row *result, void *closure_data)
   else if (result->key == NULL)
     printf ("Not found.\n");
   else
-    printf ("%s:%s\n", result->key, result->value);
+    fprintf(stdout, "Key value pair: %s:%s\n", result->key, result->value);
   * (protobuf_c_boolean *)closure_data = 1;
 }
 
@@ -54,8 +54,7 @@ static void handle_set_response (const Dkvs__Status *result, void *closure_data)
   if (result == NULL)
     printf ("Error processing request.\n");
   else
-    printf("%d\n", result->status);
-
+    printf("Status for set rpc:%d\n", result->status);
   * (protobuf_c_boolean *)closure_data = 1;
 }
 
@@ -67,7 +66,7 @@ static void handle_router_response (const Dkvs__RouterResponse *result, void *cl
     printf ("No Server found.\n");
   else
   {
-    printf ("%s\n", result->address);
+    printf ("Server address:%s\n", result->address);
     server_addr = (char *)malloc(sizeof(result->address));
     strcpy(server_addr, result->address);
   }
@@ -102,7 +101,7 @@ int main(int argc, char**argv)
   client_for_router = (ProtobufC_RPC_Client *) router_service;
 
 router:
-  fprintf (stderr, "Connecting to router\n");
+  fprintf (stderr, "Connecting to router...\n");
   while (!protobuf_c_rpc_client_is_connected (client_for_router))
     protobuf_c_rpc_dispatch_run (protobuf_c_rpc_dispatch_default ());
   fprintf (stderr, "done.\n");
@@ -110,17 +109,13 @@ router:
   char get[1024];
   Dkvs__RouterRequest query = DKVS__ROUTER_REQUEST__INIT;
   protobuf_c_boolean done = 0;
-  printf("Enter the key\n>>");
+  printf("Enter the key to be searched\n>>");
   fgets (get, sizeof (get), stdin);
-  char buf2[strlen(get)];
-  strncpy(buf2, get, strlen(get)-1);
-  query.key = buf2;
-  printf("Got %sSending %s\n", get, query.key);
+  query.key = strtok(get, "\n");
   dkvs__router__get_server (router_service, &query, handle_router_response, &done);
   while (!done)
     protobuf_c_rpc_dispatch_run (protobuf_c_rpc_dispatch_default ());  
 
-  printf("%s\n", server_addr);
   server_service = protobuf_c_rpc_client_new(address_type, server_addr, &dkvs__server__descriptor, NULL);
   if (server_service == NULL)
     die ("error creating client");
@@ -139,46 +134,40 @@ router:
     fprintf(stderr, ">>");
     if (fgets (command, sizeof (command), stdin) == NULL)
         break;
-    else if (!(strcmp(command, "set\n")))
+    else if (!(strcmp(strtok(command, "\n"), "set")))
     {
       {
         protobuf_c_boolean is_done = 0;
         Dkvs__Row query = DKVS__ROW__INIT;
         char *key = (char *)malloc(1024);
         char *val = (char *)malloc(1024);
-        fprintf(stderr, "Enter key\n>>");
+        fprintf(stderr, "Enter key again\n>>");
         fgets(key, 1024, stdin);
         fprintf(stderr, "Enter value\n>>");
         fgets(val, 1024, stdin);
-        char temp_key[strlen(key)];
-        strncpy(temp_key, key, strlen(key)-1);
-        char temp_value[strlen(val)];
-        strncpy(temp_value, val, strlen(val)-1);
-        query.key = temp_key;
-        query.value = temp_value;
+        query.key = strtok(key, "\n");
+        query.value = strtok(val, "\n");
         dkvs__server__set(server_service, &query, handle_set_response, &is_done);
         while (!is_done)
           protobuf_c_rpc_dispatch_run (protobuf_c_rpc_dispatch_default ());
       }
     }
-    else if (!(strcmp(command, "get\n")))
+    else if (!(strcmp(strtok(command, "\n"), "get")))
     {
-      char buf[1024];
-      Dkvs__RouterRequest query = DKVS__ROUTER_REQUEST__INIT;
-      protobuf_c_boolean is_done = 0;
+      char buffer[1024];
+      Dkvs__RouterRequest get_query = DKVS__ROUTER_REQUEST__INIT;
+      protobuf_c_boolean finished = 0;
       printf("Enter the key\n>>");
-      if (fgets (buf, 1024, stdin) == NULL)
-        break;
-      char buf2[strlen(buf)];
-      strncpy(buf2, buf, strlen(buf)-1);
-      query.key = buf2;
-      printf("Got %sSending %s:%s\n", buf, query.key, buf2);
-      dkvs__server__get (server_service, &query, handle_get_response, &is_done);
-      while (!is_done)
+      fgets (buffer, sizeof (buffer), stdin);
+      get_query.key = strtok(buffer, "\n");
+      dkvs__server__get (server_service, &get_query, handle_get_response, &finished);
+      while (!finished)
         protobuf_c_rpc_dispatch_run (protobuf_c_rpc_dispatch_default ());
     }
     else
-      goto router; 
+      goto router;
+
+    goto router;   
   }
   
   return 0;
